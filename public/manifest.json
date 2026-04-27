@@ -1,0 +1,10 @@
+{
+    "name": "Quickpath",
+    "version": "0.0.1",
+    "manifest_version": 1,
+    "author": "ArmindoFlores",
+    "homepage_url": "https://github.com/ArmindoFlores/obr-quickpath",
+    "icon": "/favicon.svg",
+    "background_url": "/background.html",
+    "description": "Move tokens from one location to another using the shortest path"
+}
