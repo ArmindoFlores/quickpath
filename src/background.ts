@@ -157,7 +157,10 @@ function occupancyGridUpdatedNeeded(items: Item[]) {
     let update = false;
     for (const itemKey of cache.items.keys()) {
         const corresponding = items.find(item => item.id === itemKey);
-        if (corresponding === undefined) update = true;
+        if (corresponding === undefined || (!isBlockingLine(corresponding) && !(corresponding.layer === "MAP" && isImage(corresponding)))) {
+            update = true;
+            cache.delete(itemKey);
+        }
     }
     for (const item of items) {
         if (item.layer === "MAP" && isImage(item)) {
@@ -166,7 +169,8 @@ function occupancyGridUpdatedNeeded(items: Item[]) {
             }
         }
         else if (isBlockingLine(item)) {
-            if (cache.update(item.id, {points: item.points, position: item.position})) {
+            // FIXME: only track relevant metadata
+            if (cache.update(item.id, {points: item.points, position: item.position, metadata: item.metadata})) {
                 update = true;
             }
         }
@@ -257,7 +261,7 @@ function setupScene() {
 
         unsubscribeFromSceneItems = OBR.scene.items.onChange(updateOccupancyMap);
         unsubscribeFromSceneGrid = OBR.scene.grid.onChange(newObrGrid => {
-            cache.clear();
+            pathfind.clearCache();
             const shouldUpdateOccupancyMap = obrGrid === null || obrGrid.dpi !== newObrGrid.dpi || obrGrid.type !== newObrGrid.type;
             obrGrid = parseGrid(newObrGrid);
             if (shouldUpdateOccupancyMap) {
