@@ -207,11 +207,27 @@ function getEuclideanDistanceFunction(scale: number): DistanceFunction {
     };
 }
 
+function getChebychevDistanceFunction(scale: number): DistanceFunction {
+    return (source, dest) => {
+        return scale * Math.max(Math.abs(source.x - dest.x), Math.abs(source.y - dest.y));
+    };
+}
+
+function getManhattanDistanceFunction(scale: number): DistanceFunction {
+    return (source, dest) => {
+        return scale * (Math.abs(source.x - dest.x) + Math.abs(source.y - dest.y));
+    };
+}
+
 function distanceFunctionFromGrid(grid: ParsedGrid): DistanceFunction {
     // FIXME: take grid.type and into consideration
     switch (grid.measurement) {
         case "EUCLIDEAN":
             return getEuclideanDistanceFunction(grid.scale.parsed.multiplier);
+        case "CHEBYSHEV":
+            return getChebychevDistanceFunction(grid.scale.parsed.multiplier);
+        case "MANHATTAN":
+            return getManhattanDistanceFunction(grid.scale.parsed.multiplier);
         default:
             console.warn(`unknown measurement type "${grid.measurement}"`);
             return getEuclideanDistanceFunction(grid.scale.parsed.multiplier);
@@ -261,7 +277,17 @@ function setupScene() {
             {cursor: "crosshair"},
         ],
         preventDrag: {dragging: false},
-        onClick: () => OBR.tool.activateMode(MEASURE_TOOL, FIND_PATH_TOOL_MODE),
+        onClick: () => {
+            if (obrGrid?.measurement === "ALTERNATING") {
+                OBR.notification.show(`The "ALTERNATING" measuring mode is not supported.`, "ERROR");
+            }
+            else if (obrGrid?.type !== "SQUARE") {
+                OBR.notification.show(`The "${obrGrid?.type}" grid type is not supported.`, "ERROR");
+            }
+            else {
+                OBR.tool.activateMode(MEASURE_TOOL, FIND_PATH_TOOL_MODE);
+            }
+        },
         onKeyUp: (_, event) => processKey(event),
         onToolDragStart: (_, event) => startPathfinding(event),
         onToolDragMove: (_, event) => updatePathfinding(event),
@@ -290,7 +316,9 @@ function setupScene() {
                 grid.unit = obrGrid.scale.parsed.unit;
             }
         });
-        getGrid().then(grid => obrGrid = grid);
+        getGrid().then(grid => {
+            obrGrid = grid;
+        });
         OBR.scene.items.getItems().then(updateOccupancyMap);
     }
 
