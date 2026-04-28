@@ -1,6 +1,7 @@
 import OBR, { buildCurve, buildImage, type Curve, type Image, type InteractionManager, type Vector2 } from "@owlbear-rodeo/sdk";
 import type { PathfindingResult } from "./pathfinding";
 import type { WritableDraft } from "immer";
+import { gridPositionToCoords, type ParsedGrid } from "./gridTools";
 
 export type QuickpathInteractionArgs = [Curve, Image, Image];
 export type QuickpathInteraction = InteractionManager<QuickpathInteractionArgs>;
@@ -27,6 +28,7 @@ function buildRulerEnd(target: Image): Image {
         .position(target.position)
         .scale(target.scale)
         .rotation(target.rotation)
+        .textType("PLAIN")
         .build();
 }
 
@@ -45,18 +47,34 @@ export async function startQuickpathInteraction(target: Image) {
     return interaction;
 }
 
-export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: PathfindingResult, targetPos: Vector2, dpi: number) {
+export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: PathfindingResult, targetPos: Vector2, grid: ParsedGrid) {
     const [ruler, ending, target] = drafts;
 
     if (path === null) {
+        ending.text.plainText = "";
         ruler.points = makeRelative([ruler.position, targetPos]);
-        ending.position = target.position;
+        ending.position = targetPos;
+        ending.image = {
+            url: `${window.origin}/forbidden.png`,
+            mime: "image/png",
+            width: 1280,
+            height: 1280,
+        };
+        ending.grid = {
+            dpi: 2 * 1280 * grid.dpi / target.grid.dpi,
+            offset: { x: 640, y: 640 },
+        };
     }
     else {
-        const scaledPath = path.path.map(point => ({ x: (point.x + 0.5) * dpi, y: (point.y + 0.5) * dpi })); 
+        ending.image = target.image;
+        ending.grid = target.grid;
+        ending.text.plainText = `${path.distance !== 0 ? path.distance.toFixed(grid.scale.parsed.digits) + grid.scale.parsed.unit : ""}`;
+        ending.text.style.fontSize = 30;
+
+        const scaledPath = path.path.map(point => gridPositionToCoords(point, grid.dpi)); 
         ruler.points = makeRelative(scaledPath);
         if (ruler.points.length > 0) {
-            ending.position = scaledPath.at(-1);
+            ending.position = scaledPath.at(-1)!;
         }
         else {
             ending.position = target.position;

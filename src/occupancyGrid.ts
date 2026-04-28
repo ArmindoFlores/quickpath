@@ -10,12 +10,16 @@ export interface OccupancyGridBounds {
     y: Bounds;
 }
 
+export type DistanceFunction = (source: Vector2, dest: Vector2) => number;
+
 export class OccupancyGrid {
     bounds: OccupancyGridBounds;
     dpi: number;
+    distanceFunc: DistanceFunction;
+    unit: string | undefined;
     __grid: Uint8Array[];
 
-    constructor(xMin: number, xMax: number, yMin: number, yMax: number, dpi: number) {
+    constructor(xMin: number, xMax: number, yMin: number, yMax: number, dpi: number, distanceFunc: DistanceFunction, unit: string | undefined = undefined) {
         this.bounds = {
             x: {
                 min: xMin / dpi,
@@ -28,6 +32,8 @@ export class OccupancyGrid {
         }
         this.dpi = dpi;
         this.__grid = [];
+        this.distanceFunc = distanceFunc;
+        this.unit = unit;
         
         for (let i = this.bounds.y.min; i < this.bounds.y.max; i++) {
             this.__grid.push(new Uint8Array(this.bounds.x.max - this.bounds.x.min).fill(0xff));
@@ -68,6 +74,7 @@ export class OccupancyGrid {
                 return 0b10000000;
             }
         }
+        throw new Error("Invalid neighbour");
     }
 
     canEnter(from: Vector2, to: Vector2) {

@@ -1,6 +1,5 @@
-import type { OccupancyGrid } from "./occupancyGrid";
+import type { DistanceFunction, OccupancyGrid } from "./occupancyGrid";
 import type { Vector2 } from "@owlbear-rodeo/sdk";
-import { utils } from "./utils";
 
 type VectorKey = `${number},${number}`;
 
@@ -43,7 +42,7 @@ function coalesce(path: Vector2[]) {
     
     for (let i = 1; i < path.length; i++) {
         const point = path[i];
-        if (i === path.length - 1 || !inline(newPath.at(-1), point)) {
+        if (i === path.length - 1 || !inline(newPath.at(-1)!, point)) {
             newPath.push(path[i-1]);
             newPath.push(point);
         }
@@ -53,7 +52,7 @@ function coalesce(path: Vector2[]) {
 
 function reconstruct(previous: Map<VectorKey, Vector2>, from: Vector2, to: Vector2) {
     const path: Vector2[] = [];
-    let u = to;
+    let u: Vector2 | undefined = to;
     if (key(u) === key(from) || previous.get(key(u))) {
         while (u) {
             path.push(u);
@@ -61,6 +60,14 @@ function reconstruct(previous: Map<VectorKey, Vector2>, from: Vector2, to: Vecto
         }
     }
     return path.toReversed();
+}
+
+function pathDistance(path: Vector2[], distanceFunction: DistanceFunction): number {
+    let total = 0;
+    for (let i = 1; i < path.length; i++) {
+        total += distanceFunction(path[i-1], path[i]);
+    }
+    return total;
 }
 
 /*
@@ -84,7 +91,7 @@ export function pathfind(from: Vector2, to: Vector2, grid: OccupancyGrid): Pathf
     let found = false;
     while (queue.length > 0) {
         queue.sort((v1, v2) => (distances.get(key(v2)) ?? +Infinity) - (distances.get(key(v1)) ?? +Infinity));
-        const u = queue.pop();
+        const u = queue.pop()!;
         if (key(u) === key(to)) {
             found = true;
             break;
@@ -93,7 +100,7 @@ export function pathfind(from: Vector2, to: Vector2, grid: OccupancyGrid): Pathf
         for (const neighbour of grid.walkableNeighbours(u)) {
             if (distances.get(key(neighbour)) === undefined) queue.push(neighbour);
             // Probably could be done with 1 instead of utils.distance, or some other distance function
-            const alt = (distances.get(key(u)) ?? +Infinity) + utils.distance(u, neighbour);
+            const alt = (distances.get(key(u)) ?? +Infinity) + grid.distanceFunc(u, neighbour);
             if (alt < (distances.get(key(neighbour)) ?? +Infinity)) {
                 distances.set(key(neighbour), alt);
                 previous.set(key(neighbour), u);
@@ -106,6 +113,6 @@ export function pathfind(from: Vector2, to: Vector2, grid: OccupancyGrid): Pathf
     const reconstructed = reconstruct(previous, from, to);
     return {
         path: coalesce(reconstructed),
-        distance: reconstructed.length
+        distance: pathDistance(reconstructed, grid.distanceFunc)
     };
 }

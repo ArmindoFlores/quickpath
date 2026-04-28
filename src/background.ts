@@ -1,10 +1,11 @@
 import OBR, { isImage, type Item, type Curve, type ToolEvent, type Vector2 } from "@owlbear-rodeo/sdk";
 import { utils } from "./utils";
-import { OccupancyGrid } from "./occupancyGrid";
+import { OccupancyGrid, type DistanceFunction } from "./occupancyGrid";
 import { cached, SceneCache } from "./caching";
 import { pathfind as _pathfind } from "./pathfinding";
 import { isEqual } from "lodash";
 import {startQuickpathInteraction, updateQuickpathRuler, type QuickpathInteraction } from "./visual";
+import { getGrid, gridPositionToCoords, parseGrid, type ParsedGrid } from "./gridTools";
 
 interface SimpleLine {
     start: Vector2;
@@ -16,7 +17,9 @@ const FIND_PATH_TOOL_MODE = utils.id("find-path");
 
 let pathfindingInteraction: QuickpathInteraction | null = null;
 let pathfindingStart: Vector2 | null = null;
-let grid: OccupancyGrid;
+let grid: OccupancyGrid | null = null;
+let obrGrid: ParsedGrid | null = null;
+let latestPath: Vector2[] | null;
 const cache: SceneCache = new SceneCache();
 
 const pathfind = cached(
@@ -36,7 +39,6 @@ async function startPathfinding(event: ToolEvent) {
         console.warn("Tried to start an interaction without canceling the last one");
         return;
     }
-    
     if (event.target === undefined || event.target.layer !== "CHARACTER" || !isImage(event.target)) return;
     const target = event.target;
     
@@ -45,7 +47,7 @@ async function startPathfinding(event: ToolEvent) {
 }
 
 function updatePathfinding(event: ToolEvent) {
-    if (pathfindingInteraction === null) {
+    if (pathfindingInteraction === null || pathfindingStart === null || grid === null || obrGrid === null) {
         return;
     }
 
@@ -60,16 +62,28 @@ function updatePathfinding(event: ToolEvent) {
     };
 
     const path = pathfind(start, end, grid);
+    latestPath = path ? path.path : null;
 
     const [update] = pathfindingInteraction;
-    update(im => updateQuickpathRuler(im, path, event.pointerPosition, grid.dpi));
+    update(im => updateQuickpathRuler(im, path, event.pointerPosition, obrGrid!));
 }
 
-function stopPathfinding() {
+function stopPathfinding(cancel: boolean) {
     if (pathfindingInteraction === null) return;
-    const [, stop] = pathfindingInteraction;
-    pathfindingInteraction = null;
+
+    let target: string = "";
+    const [update, stop] = pathfindingInteraction;
+
+    update(data => target = data[2].id);
     stop();
+    pathfindingInteraction = null;
+
+    if (!cancel && latestPath !== null) {
+        const newPosition = gridPositionToCoords(latestPath[latestPath.length - 1], obrGrid!.dpi);
+        OBR.scene.items.updateItems([target], items => {
+            items[0].position = newPosition;
+        });
+    }
 }
 
 function isBlockingLine(item: Item): item is Curve {
@@ -167,17 +181,32 @@ function vectorAdd(v1: Vector2, v2: Vector2) {
     }
 }
 
-async function updateOccupancyMap(items: Item[]) {
-    if (!occupancyGridUpdatedNeeded(items)) return;
+function getEuclideanDistanceFunction(scale: number): DistanceFunction {
+    return (source, dest) => {
+        return scale * utils.distance(source, dest);
+    };
+}
 
-    const gridDPI = await OBR.scene.grid.getDpi();
+function distanceFunctionFromGrid(grid: ParsedGrid): DistanceFunction {
+    // FIXME: take grid.type and into consideration
+    switch (grid.measurement) {
+        case "EUCLIDEAN":
+            return getEuclideanDistanceFunction(grid.scale.parsed.multiplier);
+        default:
+            console.warn(`unknown measurement type "${grid.measurement}"`);
+            return getEuclideanDistanceFunction(grid.scale.parsed.multiplier);
+    }
+}
 
-    let xMax: number, xMin: number, yMax: number, yMin: number;
+async function updateOccupancyMap(items: Item[], force: boolean = false) {
+    if (obrGrid === null || (!force && !occupancyGridUpdatedNeeded(items))) return;
+
+    let xMax: number | undefined = undefined, xMin: number | undefined = undefined, yMax: number | undefined = undefined, yMin: number | undefined = undefined;
     const visionLines: SimpleLine[] = [];
     for (const item of items) {
         if (item.layer === "MAP" && isImage(item)) {
             const itemDPI = item.grid.dpi;
-            const factor = gridDPI / itemDPI;
+            const factor = obrGrid.dpi / itemDPI;
 
             if (xMax === undefined || item.position.x + factor * item.image.width > xMax) xMax = item.position.x + factor * item.image.width;
             if (xMin === undefined || item.position.x < xMin) xMin = item.position.x;
@@ -193,8 +222,7 @@ async function updateOccupancyMap(items: Item[]) {
             }
         }
     }
-    grid = new OccupancyGrid(xMin, xMax, yMin, yMax, gridDPI);
-    console.log(grid);
+    grid = new OccupancyGrid(xMin!, xMax!, yMin!, yMax!, obrGrid.dpi, distanceFunctionFromGrid(obrGrid), obrGrid.scale.parsed.unit);
     fillOcupancyGrid(grid, visionLines);
     pathfind.clearCache();
 }
@@ -216,17 +244,31 @@ function setupScene() {
         onClick: () => OBR.tool.activateMode(MEASURE_TOOL, FIND_PATH_TOOL_MODE),
         onToolDragStart: (_, event) => startPathfinding(event),
         onToolDragMove: (_, event) => updatePathfinding(event),
-        onToolDragEnd: () => stopPathfinding(),
-        onToolDragCancel: () => stopPathfinding(),
+        onToolDragEnd: () => stopPathfinding(false),
+        onToolDragCancel: () => stopPathfinding(true),
         shortcut: "P",
     });
 
-
     let unsubscribeFromSceneItems: () => void | undefined;
+    let unsubscribeFromSceneGrid: () => void | undefined;
     function onSceneReady(ready: boolean) {
         if (!ready) return;
         cache.clear();
+
         unsubscribeFromSceneItems = OBR.scene.items.onChange(updateOccupancyMap);
+        unsubscribeFromSceneGrid = OBR.scene.grid.onChange(newObrGrid => {
+            cache.clear();
+            const shouldUpdateOccupancyMap = obrGrid === null || obrGrid.dpi !== newObrGrid.dpi || obrGrid.type !== newObrGrid.type;
+            obrGrid = parseGrid(newObrGrid);
+            if (shouldUpdateOccupancyMap) {
+                OBR.scene.items.getItems().then(items => updateOccupancyMap(items, true));
+            }
+            else if (grid !== null) {
+                grid.distanceFunc = distanceFunctionFromGrid(obrGrid);
+                grid.unit = obrGrid.scale.parsed.unit;
+            }
+        });
+        getGrid().then(grid => obrGrid = grid);
         OBR.scene.items.getItems().then(updateOccupancyMap);
     }
 
@@ -237,6 +279,7 @@ function setupScene() {
         console.log("Tearing down");
         unsubscribeFromSceneReady();
         if (unsubscribeFromSceneItems) unsubscribeFromSceneItems();
+        if (unsubscribeFromSceneGrid) unsubscribeFromSceneGrid();
     }
 }
 
@@ -244,7 +287,7 @@ function setup() {
     window.addEventListener("message", handleMessage);
     window.addEventListener("messageerror", handleMessage);
 
-    let unsubscribe: () => void | null = null;
+    let unsubscribe: (() => void) | null = null;
     OBR.scene.isReady().then(ready => {
         if (ready) {
             unsubscribe = setupScene();
