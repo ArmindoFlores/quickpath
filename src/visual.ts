@@ -1,5 +1,5 @@
 import OBR, { buildCurve, buildImage, type Curve, type Image, type InteractionManager, type Vector2 } from "@owlbear-rodeo/sdk";
-import type { PathfindingResult } from "./pathfinding";
+import type { Path, PathfindingResult } from "./pathfinding";
 import type { WritableDraft } from "immer";
 import { gridPositionToCoords, type ParsedGrid } from "./gridTools";
 
@@ -32,7 +32,7 @@ function buildRulerEnd(target: Image): Image {
         .build();
 }
 
-function makeRelative(path: Vector2[]) {
+function makeRelative(path: Path) {
     if (path.length < 2) return path;
     return path.map(point => ({ x: point.x - path[0].x, y: point.y - path[0].y }));
 }

@@ -89,8 +89,8 @@ export class OccupancyGrid {
         this.__grid[y][x] = occupancy;
     }
 
-    walkableNeighbours(node: Vector2): Vector2[] {
-        const neighbours: Vector2[] = [];
+    walkableNeighbours(node: Vector2): Path {
+        const neighbours: Path = [];
         for (let y = -1; y <= 1; y++) {
             for (let x = -1; x <= 1; x++) {
                 const neighbour = {x: node.x + x, y: node.y + y};

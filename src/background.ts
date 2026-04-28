@@ -1,8 +1,8 @@
-import OBR, { isImage, type Item, type Curve, type ToolEvent, type Vector2 } from "@owlbear-rodeo/sdk";
+import OBR, { isImage, type Item, type Curve, type ToolEvent, type Vector2, type KeyEvent } from "@owlbear-rodeo/sdk";
 import { utils } from "./utils";
 import { OccupancyGrid, type DistanceFunction } from "./occupancyGrid";
 import { cached, SceneCache } from "./caching";
-import { pathfind as _pathfind } from "./pathfinding";
+import { pathfind as _pathfind, type Path } from "./pathfinding";
 import { isEqual } from "lodash";
 import {startQuickpathInteraction, updateQuickpathRuler, type QuickpathInteraction } from "./visual";
 import { getGrid, gridPositionToCoords, parseGrid, type ParsedGrid } from "./gridTools";
@@ -15,11 +15,26 @@ interface SimpleLine {
 const MEASURE_TOOL = "rodeo.owlbear.tool/measure";
 const FIND_PATH_TOOL_MODE = utils.id("find-path");
 
+// This contains the active interaction manager if active, and null
+// otherwise
 let pathfindingInteraction: QuickpathInteraction | null = null;
+// This contains the starting point for this interaction if active,
+// and null otherwise.
 let pathfindingStart: Vector2 | null = null;
+
+// This contains an occupancy grid that is used for path finding and
+// is computed from the current scene and its obstructions
 let grid: OccupancyGrid | null = null;
+// This contains the most recent OBR Grid object, but representing scale
+// as GridScale instead of stringl
 let obrGrid: ParsedGrid | null = null;
-let latestPath: Vector2[] | null;
+
+// This contains the latest valid path while using the Quickpath tool,
+// or null otherwise
+let latestPath: Path | null;
+
+// This cache contains relevant scene items and is used to track whether
+// any changes made should require a recomputation for the OccupancyGrid
 const cache: SceneCache = new SceneCache();
 
 const pathfind = cached(
@@ -29,9 +44,10 @@ const pathfind = cached(
 );
 pathfind.setMaxCacheSize(50);
 
-function handleMessage(event: MessageEvent) {
-    if (event.origin !== window.location.origin) return;
-    console.log("Received event!", event);
+async function processKey(event: KeyEvent) {
+    if (pathfindingInteraction === null) return;
+    if (!event.code.startsWith("Shift")) return;
+    // TODO: split path
 }
 
 async function startPathfinding(event: ToolEvent) {
@@ -246,10 +262,12 @@ function setupScene() {
         ],
         preventDrag: {dragging: false},
         onClick: () => OBR.tool.activateMode(MEASURE_TOOL, FIND_PATH_TOOL_MODE),
+        onKeyUp: (_, event) => processKey(event),
         onToolDragStart: (_, event) => startPathfinding(event),
         onToolDragMove: (_, event) => updatePathfinding(event),
         onToolDragEnd: () => stopPathfinding(false),
         onToolDragCancel: () => stopPathfinding(true),
+        onDeactivate: () => stopPathfinding(true),
         shortcut: "P",
     });
 
@@ -288,9 +306,6 @@ function setupScene() {
 }
 
 function setup() {
-    window.addEventListener("message", handleMessage);
-    window.addEventListener("messageerror", handleMessage);
-
     let unsubscribe: (() => void) | null = null;
     OBR.scene.isReady().then(ready => {
         if (ready) {

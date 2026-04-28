@@ -2,9 +2,10 @@ import type { DistanceFunction, OccupancyGrid } from "./occupancyGrid";
 import type { Vector2 } from "@owlbear-rodeo/sdk";
 
 type VectorKey = `${number},${number}`;
+export type Path = Vector2[];
 
 export interface PathfindingResultSuccess {
-    path: Vector2[]; 
+    path: Path; 
     distance: number;
 }
 
@@ -35,7 +36,7 @@ function inline(v1: Vector2, v2: Vector2) {
     return false;
 }
 
-function coalesce(path: Vector2[]) {
+function coalesce(path: Path) {
     if (path.length < 2) return path;
 
     const newPath = [path[0]];
@@ -51,7 +52,7 @@ function coalesce(path: Vector2[]) {
 }
 
 function reconstruct(previous: Map<VectorKey, Vector2>, from: Vector2, to: Vector2) {
-    const path: Vector2[] = [];
+    const path: Path = [];
     let u: Vector2 | undefined = to;
     if (key(u) === key(from) || previous.get(key(u))) {
         while (u) {
@@ -62,7 +63,7 @@ function reconstruct(previous: Map<VectorKey, Vector2>, from: Vector2, to: Vecto
     return path.toReversed();
 }
 
-function pathDistance(path: Vector2[], distanceFunction: DistanceFunction): number {
+function pathDistance(path: Path, distanceFunction: DistanceFunction): number {
     let total = 0;
     for (let i = 1; i < path.length; i++) {
         total += distanceFunction(path[i-1], path[i]);
