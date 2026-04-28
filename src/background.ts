@@ -78,7 +78,7 @@ function stopPathfinding(cancel: boolean) {
     stop();
     pathfindingInteraction = null;
 
-    if (!cancel && latestPath !== null) {
+    if (!cancel && latestPath !== null && latestPath.length > 0) {
         const newPosition = gridPositionToCoords(latestPath[latestPath.length - 1], obrGrid!.dpi);
         OBR.scene.items.updateItems([target], items => {
             items[0].position = newPosition;
