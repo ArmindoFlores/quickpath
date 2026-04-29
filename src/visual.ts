@@ -2,7 +2,7 @@ import OBR, { buildCurve, buildImage, type Curve, type Image, type InteractionMa
 import type { Path, PathfindingResult } from "./pathfinding";
 import type { WritableDraft } from "immer";
 import { type ParsedGrid } from "./gridTools";
-import type { OccupancyGrid } from "./occupancyGrid";
+import type { GridMap } from "./gridMaps";
 
 export type QuickpathInteractionArgs = [Curve, Image, Image];
 export type QuickpathInteraction = InteractionManager<QuickpathInteractionArgs>;
@@ -48,7 +48,7 @@ export async function startQuickpathInteraction(target: Image) {
     return interaction;
 }
 
-export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: PathfindingResult, targetPos: Vector2, obrGrid: ParsedGrid, grid: OccupancyGrid) {
+export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: PathfindingResult, targetPos: Vector2, obrGrid: ParsedGrid, grid: GridMap) {
     const [ruler, ending, target] = drafts;
 
     if (path === null) {

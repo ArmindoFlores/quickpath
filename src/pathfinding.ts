@@ -1,4 +1,4 @@
-import type { DistanceFunction, OccupancyGrid } from "./occupancyGrid";
+import type { CostFunction, GridMap } from "./gridMaps";
 import type { Vector2 } from "@owlbear-rodeo/sdk";
 
 export interface PathfindingResultSuccess {
@@ -80,7 +80,7 @@ function reconstruct(previous: Map<VectorKey, Vector2>, from: Vector2, to: Vecto
     return path.toReversed();
 }
 
-function pathDistance(path: Path, distanceFunction: DistanceFunction): number {
+function pathDistance(path: Path, distanceFunction: CostFunction): number {
     let total = 0;
     for (let i = 1; i < path.length; i++) {
         total += distanceFunction(path[i-1], path[i]);
@@ -92,7 +92,7 @@ function pathDistance(path: Path, distanceFunction: DistanceFunction): number {
     Finds the shortest path between two points in a grid using
     Dijkstra's algorithm. 
 */
-export function pathfind(from: Vector2, to: Vector2, grid: OccupancyGrid): PathfindingResult {
+export function pathfind(from: Vector2, to: Vector2, gridMap: GridMap): PathfindingResult {
     if (key(from) === key(to)) {
         return {
             path: [],
@@ -115,10 +115,10 @@ export function pathfind(from: Vector2, to: Vector2, grid: OccupancyGrid): Pathf
             break;
         }
         
-        for (const neighbour of grid.walkableNeighbours(u)) {
+        for (const neighbour of gridMap.walkableNeighbours(u)) {
             if (distances.get(key(neighbour)) === undefined) queue.push(neighbour);
             // Probably could be done with 1 instead of utils.distance, or some other distance function
-            const alt = (distances.get(key(u)) ?? +Infinity) + grid.distanceFunc(u, neighbour);
+            const alt = (distances.get(key(u)) ?? +Infinity) + gridMap.cost(u, neighbour);
             if (alt < (distances.get(key(neighbour)) ?? +Infinity)) {
                 distances.set(key(neighbour), alt);
                 previous.set(key(neighbour), u);
@@ -131,6 +131,6 @@ export function pathfind(from: Vector2, to: Vector2, grid: OccupancyGrid): Pathf
     const reconstructed = reconstruct(previous, from, to);
     return {
         path: coalesce(reconstructed),
-        distance: pathDistance(reconstructed, grid.distanceFunc)
+        distance: pathDistance(reconstructed, gridMap.cost)
     };
 }

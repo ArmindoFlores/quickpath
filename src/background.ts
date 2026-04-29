@@ -1,16 +1,11 @@
 import OBR, { isImage, type Item, type Curve, type ToolEvent, type Vector2, type KeyEvent, type Image } from "@owlbear-rodeo/sdk";
 import { utils } from "./utils";
-import { OccupancyGrid, type DistanceFunction } from "./occupancyGrid";
+import { SquareGrid, type CostFunction, type GridMap } from "./gridMaps";
 import { cached, SceneCache } from "./caching";
 import { pathfind as _pathfind, type Path } from "./pathfinding";
 import { isEqual } from "lodash";
 import {startQuickpathInteraction, updateQuickpathRuler, type QuickpathInteraction } from "./visual";
-import { getGrid, parseGrid, type ParsedGrid } from "./gridTools";
-
-interface SimpleLine {
-    start: Vector2;
-    end: Vector2;
-}
+import { getGrid, parseGrid, type ParsedGrid, type SimpleLine } from "./gridTools";
 
 const MEASURE_TOOL = "rodeo.owlbear.tool/measure";
 const FIND_PATH_TOOL_MODE = utils.id("find-path");
@@ -24,7 +19,7 @@ let pathfindingStart: Vector2 | null = null;
 
 // This contains an occupancy grid that is used for path finding and
 // is computed from the current scene and its obstructions
-let grid: OccupancyGrid | null = null;
+let gridMap: GridMap | null = null;
 // This contains the most recent OBR Grid object, but representing scale
 // as GridScale instead of stringl
 let obrGrid: ParsedGrid | null = null;
@@ -70,22 +65,22 @@ function updatePathfinding(event: ToolEvent) {
     const [update] = pathfindingInteraction;
     update(im => {
         // FIXME: do not call update if pathfinding hasn't changed to prevent timeouts!
-        if (pathfindingStart === null || grid === null || obrGrid === null) {
+        if (pathfindingStart === null || gridMap === null || obrGrid === null) {
             return;
         }
         
-        const start = grid.fromWorldCoords(pathfindingStart);
-        const end = grid.fromWorldCoords(event.pointerPosition);
+        const start = gridMap.fromWorldCoords(pathfindingStart);
+        const end = gridMap.fromWorldCoords(event.pointerPosition);
 
-        const path = pathfind(start, end, grid);
+        const path = pathfind(start, end, gridMap);
         latestPath = path ? path.path : null;
 
-        updateQuickpathRuler(im, path, event.pointerPosition, obrGrid, grid)
+        updateQuickpathRuler(im, path, event.pointerPosition, obrGrid, gridMap)
     });
 }
 
 function stopPathfinding(cancel: boolean) {
-    if (pathfindingInteraction === null || grid === null) return;
+    if (pathfindingInteraction === null || gridMap === null) return;
 
     let target: string = "";
     const [update, stop] = pathfindingInteraction;
@@ -98,7 +93,7 @@ function stopPathfinding(cancel: boolean) {
         OBR.scene.items.updateItems([target], items => {
             if (latestPath === null || latestPath.length === 0) return;
             const image = items[0] as Image;
-            const newPosition = grid!.toCenteredWorldCoords(latestPath[latestPath.length - 1]);
+            const newPosition = gridMap!.toCenteredWorldCoords(latestPath[latestPath.length - 1]);
             image.position = newPosition;
         });
     }
@@ -115,55 +110,6 @@ function isBlockingLine(item: Item): item is Curve {
             item.metadata["com.battle-system.smoke/doorOpen"] === true
         )
     );
-}
-
-function intersects(line1: SimpleLine, line2: SimpleLine) {
-    const { start: p1, end: p2 } = line1;
-    const { start: p3, end: p4 } = line2;
-
-    const d1x = p2.x - p1.x;
-    const d1y = p2.y - p1.y;
-    const d2x = p4.x - p3.x;
-    const d2y = p4.y - p3.y;
-
-    const denom = d1x * d2y - d1y * d2x;
-
-    if (denom === 0) return false;
-
-    const dx = p3.x - p1.x;
-    const dy = p3.y - p1.y;
-
-    const t = (dx * d2y - dy * d2x) / denom;
-    const u = (dx * d1y - dy * d1x) / denom;
-
-    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
-}
-
-function computeOccupancy(x: number, y: number, grid: OccupancyGrid, lines: SimpleLine[]) {
-    let occupancy = 0xff;
-    for (let yOffset = -1; yOffset <= 1; yOffset++) {
-        for (let xOffset = -1; xOffset <= 1; xOffset++) {
-            if (yOffset === 0 && xOffset === 0) continue;
-            for (const line of lines) {
-                const start = grid.toCenteredWorldCoords({x: x + xOffset, y: y + yOffset});
-                const end = grid.toCenteredWorldCoords({x, y});
-
-                if (intersects(line, {start, end})) {
-                    occupancy ^= grid.maskFromNeighbour({x: xOffset, y: yOffset});
-                    break;
-                }
-            }
-        }
-    }
-    return occupancy;
-}
-
-function fillOcupancyGrid(grid: OccupancyGrid, lines: SimpleLine[]) {
-    for (let y = 0; y < grid.bounds.height; y++) {
-        for (let x = 0; x < grid.bounds.width; x++) {
-            grid.setOccupancy(x, y, computeOccupancy(x, y, grid, lines));
-        }
-    }
 }
 
 function occupancyGridUpdatedNeeded(items: Item[]) {
@@ -198,25 +144,25 @@ function vectorAdd(v1: Vector2, v2: Vector2) {
     }
 }
 
-function getEuclideanDistanceFunction(scale: number): DistanceFunction {
+function getEuclideanDistanceFunction(scale: number): CostFunction {
     return (source, dest) => {
         return scale * utils.distance(source, dest);
     };
 }
 
-function getChebychevDistanceFunction(scale: number): DistanceFunction {
+function getChebychevDistanceFunction(scale: number): CostFunction {
     return (source, dest) => {
         return scale * Math.max(Math.abs(source.x - dest.x), Math.abs(source.y - dest.y));
     };
 }
 
-function getManhattanDistanceFunction(scale: number): DistanceFunction {
+function getManhattanDistanceFunction(scale: number): CostFunction {
     return (source, dest) => {
         return scale * (Math.abs(source.x - dest.x) + Math.abs(source.y - dest.y));
     };
 }
 
-function distanceFunctionFromGrid(grid: ParsedGrid): DistanceFunction {
+function distanceFunctionFromGrid(grid: ParsedGrid): CostFunction {
     // FIXME: take grid.type and into consideration
     switch (grid.measurement) {
         case "EUCLIDEAN":
@@ -259,14 +205,14 @@ async function updateOccupancyMap(items: Item[], force: boolean = false) {
         return;
     }
 
-    grid = new OccupancyGrid(
+    gridMap = new SquareGrid(
         xMin, xMax, yMin, yMax,
         obrGrid.dpi,
         distanceFunctionFromGrid(obrGrid),
         obrGrid.scale.parsed.unit
     );
 
-    fillOcupancyGrid(grid, visionLines);
+    gridMap.build(visionLines);
     pathfind.clearCache();
 }
 
@@ -316,9 +262,9 @@ function setupScene() {
             if (shouldUpdateOccupancyMap) {
                 OBR.scene.items.getItems().then(items => updateOccupancyMap(items, true));
             }
-            else if (grid !== null) {
-                grid.distanceFunc = distanceFunctionFromGrid(obrGrid);
-                grid.unit = obrGrid.scale.parsed.unit;
+            else if (gridMap !== null) {
+                gridMap.cost = distanceFunctionFromGrid(obrGrid);
+                gridMap.unit = obrGrid.scale.parsed.unit;
             }
         });
         getGrid().then(grid => {
