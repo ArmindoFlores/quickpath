@@ -1,16 +1,10 @@
-import type { Grid, GridScale, Vector2 } from "@owlbear-rodeo/sdk";
+import type { Grid, GridScale, Image } from "@owlbear-rodeo/sdk";
 import OBR from "@owlbear-rodeo/sdk";
+import type { Dimensions } from "./occupancyGrid";
 
 const GRID_SCALE_REGEX = /^(\d+(?:\.\d+)?)([a-zA-Z]*)/;
 
 export type ParsedGrid = Omit<Grid, "scale" | "style"> & { scale: GridScale };
-
-export function gridPositionToCoords(position: Vector2, dpi: number): Vector2 {
-    return {
-        x: (position.x + 0.5) * dpi,
-        y: (position.y + 0.5) * dpi
-    };
-}
 
 export async function getGrid(): Promise<ParsedGrid> {
     const [
@@ -52,4 +46,11 @@ export function parseGrid(grid: Grid): ParsedGrid {
             }
         },
     }
+}
+
+export function imageDimensions(image: Image): Dimensions {
+    return {
+        width: image.image.width * image.scale.x / image.grid.dpi,
+        height: image.image.height  * image.scale.y / image.grid.dpi,
+    };
 }

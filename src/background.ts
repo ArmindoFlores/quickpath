@@ -1,11 +1,11 @@
-import OBR, { isImage, type Item, type Curve, type ToolEvent, type Vector2, type KeyEvent } from "@owlbear-rodeo/sdk";
+import OBR, { isImage, type Item, type Curve, type ToolEvent, type Vector2, type KeyEvent, type Image } from "@owlbear-rodeo/sdk";
 import { utils } from "./utils";
 import { OccupancyGrid, type DistanceFunction } from "./occupancyGrid";
 import { cached, SceneCache } from "./caching";
 import { pathfind as _pathfind, type Path } from "./pathfinding";
 import { isEqual } from "lodash";
 import {startQuickpathInteraction, updateQuickpathRuler, type QuickpathInteraction } from "./visual";
-import { getGrid, gridPositionToCoords, parseGrid, type ParsedGrid } from "./gridTools";
+import { getGrid, parseGrid, type ParsedGrid } from "./gridTools";
 
 interface SimpleLine {
     start: Vector2;
@@ -63,29 +63,29 @@ async function startPathfinding(event: ToolEvent) {
 }
 
 function updatePathfinding(event: ToolEvent) {
-    if (pathfindingInteraction === null || pathfindingStart === null || grid === null || obrGrid === null) {
+    if (pathfindingInteraction === null) {
         return;
     }
 
-    const start = {
-        x: Math.round(pathfindingStart.x / grid.dpi - 0.5),
-        y: Math.round(pathfindingStart.y / grid.dpi - 0.5),
-    };
-
-    const end = {
-        x: Math.round(event.pointerPosition.x / grid.dpi - 0.5),
-        y: Math.round(event.pointerPosition.y / grid.dpi - 0.5),
-    };
-
-    const path = pathfind(start, end, grid);
-    latestPath = path ? path.path : null;
-
     const [update] = pathfindingInteraction;
-    update(im => updateQuickpathRuler(im, path, event.pointerPosition, obrGrid!));
+    update(im => {
+        // FIXME: do not call update if pathfinding hasn't changed to prevent timeouts!
+        if (pathfindingStart === null || grid === null || obrGrid === null) {
+            return;
+        }
+        
+        const start = grid.fromWorldCoords(pathfindingStart);
+        const end = grid.fromWorldCoords(event.pointerPosition);
+
+        const path = pathfind(start, end, grid);
+        latestPath = path ? path.path : null;
+
+        updateQuickpathRuler(im, path, event.pointerPosition, obrGrid, grid)
+    });
 }
 
 function stopPathfinding(cancel: boolean) {
-    if (pathfindingInteraction === null) return;
+    if (pathfindingInteraction === null || grid === null) return;
 
     let target: string = "";
     const [update, stop] = pathfindingInteraction;
@@ -94,10 +94,12 @@ function stopPathfinding(cancel: boolean) {
     stop();
     pathfindingInteraction = null;
 
-    if (!cancel && latestPath !== null && latestPath.length > 0) {
-        const newPosition = gridPositionToCoords(latestPath[latestPath.length - 1], obrGrid!.dpi);
+    if (!cancel) {
         OBR.scene.items.updateItems([target], items => {
-            items[0].position = newPosition;
+            if (latestPath === null || latestPath.length === 0) return;
+            const image = items[0] as Image;
+            const newPosition = grid!.toCenteredWorldCoords(latestPath[latestPath.length - 1]);
+            image.position = newPosition;
         });
     }
 }
@@ -143,14 +145,9 @@ function computeOccupancy(x: number, y: number, grid: OccupancyGrid, lines: Simp
         for (let xOffset = -1; xOffset <= 1; xOffset++) {
             if (yOffset === 0 && xOffset === 0) continue;
             for (const line of lines) {
-                const start: Vector2 = {
-                    x: Math.round((x + xOffset + 0.5) * grid.dpi),
-                    y: Math.round((y + yOffset + 0.5) * grid.dpi),
-                };
-                const end: Vector2 = {
-                    x: Math.round((x + 0.5) * grid.dpi),
-                    y: Math.round((y + 0.5) * grid.dpi),
-                };
+                const start = grid.toCenteredWorldCoords({x: x + xOffset, y: y + yOffset});
+                const end = grid.toCenteredWorldCoords({x, y});
+
                 if (intersects(line, {start, end})) {
                     occupancy ^= grid.maskFromNeighbour({x: xOffset, y: yOffset});
                     break;
@@ -162,8 +159,8 @@ function computeOccupancy(x: number, y: number, grid: OccupancyGrid, lines: Simp
 }
 
 function fillOcupancyGrid(grid: OccupancyGrid, lines: SimpleLine[]) {
-    for (let y = grid.bounds.y.min; y < grid.bounds.y.max; y++) {
-        for (let x = grid.bounds.x.min; x < grid.bounds.x.max; x++) {
+    for (let y = 0; y < grid.bounds.height; y++) {
+        for (let x = 0; x < grid.bounds.width; x++) {
             grid.setOccupancy(x, y, computeOccupancy(x, y, grid, lines));
         }
     }
@@ -258,14 +255,22 @@ async function updateOccupancyMap(items: Item[], force: boolean = false) {
             }
         }
     }
-    grid = new OccupancyGrid(xMin!, xMax!, yMin!, yMax!, obrGrid.dpi, distanceFunctionFromGrid(obrGrid), obrGrid.scale.parsed.unit);
+    if (!yMax || !xMax || !xMin || !yMin) {
+        return;
+    }
+
+    grid = new OccupancyGrid(
+        xMin, xMax, yMin, yMax,
+        obrGrid.dpi,
+        distanceFunctionFromGrid(obrGrid),
+        obrGrid.scale.parsed.unit
+    );
+
     fillOcupancyGrid(grid, visionLines);
     pathfind.clearCache();
 }
 
 function setupScene() {
-    console.log("Setting up");
-
     OBR.tool.createMode({
         id: FIND_PATH_TOOL_MODE,
         icons: [
@@ -326,7 +331,6 @@ function setupScene() {
     const unsubscribeFromSceneReady = OBR.scene.onReadyChange(onSceneReady);
 
     return () => {
-        console.log("Tearing down");
         unsubscribeFromSceneReady();
         if (unsubscribeFromSceneItems) unsubscribeFromSceneItems();
         if (unsubscribeFromSceneGrid) unsubscribeFromSceneGrid();

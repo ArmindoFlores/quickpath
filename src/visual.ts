@@ -1,7 +1,8 @@
 import OBR, { buildCurve, buildImage, type Curve, type Image, type InteractionManager, type Vector2 } from "@owlbear-rodeo/sdk";
 import type { Path, PathfindingResult } from "./pathfinding";
 import type { WritableDraft } from "immer";
-import { gridPositionToCoords, type ParsedGrid } from "./gridTools";
+import { type ParsedGrid } from "./gridTools";
+import type { OccupancyGrid } from "./occupancyGrid";
 
 export type QuickpathInteractionArgs = [Curve, Image, Image];
 export type QuickpathInteraction = InteractionManager<QuickpathInteractionArgs>;
@@ -47,7 +48,7 @@ export async function startQuickpathInteraction(target: Image) {
     return interaction;
 }
 
-export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: PathfindingResult, targetPos: Vector2, grid: ParsedGrid) {
+export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: PathfindingResult, targetPos: Vector2, obrGrid: ParsedGrid, grid: OccupancyGrid) {
     const [ruler, ending, target] = drafts;
 
     if (path === null) {
@@ -61,20 +62,20 @@ export function updateQuickpathRuler(drafts: QuickpathInteractionDrafts, path: P
             height: 1280,
         };
         ending.grid = {
-            dpi: 2 * 1280 * grid.dpi / target.grid.dpi,
+            dpi: 2 * 1280 * obrGrid.dpi / target.grid.dpi,
             offset: { x: 640, y: 640 },
         };
     }
     else {
         ending.image = target.image;
         ending.grid = target.grid;
-        ending.text.plainText = `${path.distance !== 0 ? path.distance.toFixed(grid.scale.parsed.digits) + grid.scale.parsed.unit : ""}`;
+        ending.text.plainText = `${path.distance !== 0 ? path.distance.toFixed(obrGrid.scale.parsed.digits) + obrGrid.scale.parsed.unit : ""}`;
         ending.text.style.fontSize = 30;
 
-        const scaledPath = path.path.map(point => gridPositionToCoords(point, grid.dpi)); 
+        const scaledPath = path.path.map(point => grid.toWorldCoords(point)); 
         ruler.points = makeRelative(scaledPath);
         if (ruler.points.length > 0) {
-            ending.position = scaledPath.at(-1)!;
+            ending.position = grid.toCenteredWorldCoords(path.path.at(-1)!);
         }
         else {
             ending.position = target.position;
