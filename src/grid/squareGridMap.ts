@@ -1,25 +1,8 @@
+import type { CostFunction, GridMap } from "./map";
+import type { Dimensions, Path, SimpleLine } from "./types";
+
 import type { Vector2 } from "@owlbear-rodeo/sdk";
-import type { Path } from "./pathfinding";
-import { intersects, type SimpleLine } from "./gridTools";
-
-export interface Dimensions {
-    width: number;
-    height: number;
-}
-
-export type CostFunction = (source: Vector2, dest: Vector2) => number;
-
-export interface GridMap {
-    cost: CostFunction;
-    unit: string | undefined;
-
-    build(lines: SimpleLine[]): void;
-
-    toWorldCoords(gridCoords: Vector2): Vector2 ;
-    toCenteredWorldCoords(gridCoords: Vector2, dimensions?: Dimensions | undefined): Vector2;
-    fromWorldCoords(worldCoords: Vector2, dimensions?: Dimensions | undefined): Vector2;
-    walkableNeighbours(node: Vector2): Path;
-};
+import { intersects } from "./tools";
 
 export class SquareGrid implements GridMap {
     unit: string | undefined;
@@ -47,7 +30,7 @@ export class SquareGrid implements GridMap {
     }
 
     $computeOccupancy(x: number, y: number, lines: SimpleLine[]) {
-        let occupancy = 0xff;
+        let occupancy = 0;
         for (let yOffset = -1; yOffset <= 1; yOffset++) {
             for (let xOffset = -1; xOffset <= 1; xOffset++) {
                 if (yOffset === 0 && xOffset === 0) continue;
@@ -56,7 +39,7 @@ export class SquareGrid implements GridMap {
                     const end = this.toCenteredWorldCoords({x, y});
     
                     if (intersects(line, {start, end})) {
-                        occupancy ^= this.$maskFromNeighbour({x: xOffset, y: yOffset});
+                        occupancy |= this.$maskFromNeighbour({x: xOffset, y: yOffset});
                         break;
                     }
                 }
@@ -80,17 +63,17 @@ export class SquareGrid implements GridMap {
         };
     }
 
-    toCenteredWorldCoords(gridCoords: Vector2, dimensions: Dimensions | undefined = undefined): Vector2 {
+    toCenteredWorldCoords(gridCoords: Vector2): Vector2 {
         return {
-            x: (gridCoords.x + (dimensions ? (dimensions.width / 2) : 0.5)) * this.$scale + this.$offset.x,
-            y: (gridCoords.y + (dimensions ? (dimensions.height / 2) : 0.5)) * this.$scale + this.$offset.y,
+            x: (gridCoords.x + 0.5) * this.$scale + this.$offset.x,
+            y: (gridCoords.y + 0.5) * this.$scale + this.$offset.y,
         };
     }
 
-    fromWorldCoords(worldCoords: Vector2, dimensions: Dimensions | undefined = undefined): Vector2 {
+    fromWorldCoords(worldCoords: Vector2): Vector2 {
         return {
-            x: Math.round((worldCoords.x - this.$offset.x) / this.$scale - (dimensions ? (dimensions.width / 2) : 0.5)),
-            y: Math.round((worldCoords.y - this.$offset.y) / this.$scale - (dimensions ? (dimensions.height / 2) : 0.5)),
+            x: Math.round((worldCoords.x - this.$offset.x) / this.$scale - 0.5),
+            y: Math.round((worldCoords.y - this.$offset.y) / this.$scale - 0.5),
         };
     }
 
@@ -136,19 +119,19 @@ export class SquareGrid implements GridMap {
             return false;
         }
         const mask = this.$maskFromNeighbour({x: from.x - to.x, y: from.y - to.y});
-        return !!(this.$grid[to.y][to.x] & mask);
+        return !(this.$grid[to.y][to.x] & mask);
     }
 
     $setOccupancy(x: number, y: number, occupancy: number) {
         this.$grid[y][x] = occupancy;
     }
 
-    walkableNeighbours(node: Vector2): Path {
+    walkableNeighbours(node: Vector2, considerOccupancy: boolean = true): Path {
         const neighbours: Path = [];
         for (let y = -1; y <= 1; y++) {
             for (let x = -1; x <= 1; x++) {
                 const neighbour = {x: node.x + x, y: node.y + y};
-                if ((x === 0 && y === 0) || !this.$canEnter(node, neighbour)) continue;
+                if ((x === 0 && y === 0) || (considerOccupancy && !this.$canEnter(node, neighbour))) continue;
                 neighbours.push(neighbour);
             }
         }

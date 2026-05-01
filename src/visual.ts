@@ -1,8 +1,8 @@
 import OBR, { buildCurve, buildImage, type Curve, type Image, type InteractionManager, type Vector2 } from "@owlbear-rodeo/sdk";
-import type { Path, PathfindingResult } from "./pathfinding";
+import type { PathfindingResult } from "./pathfinding";
 import type { WritableDraft } from "immer";
-import { type ParsedGrid } from "./gridTools";
-import type { GridMap } from "./gridMaps";
+import { type ParsedGrid, type Path } from "./grid";
+import type { GridMap } from "./grid/map";
 
 export type QuickpathInteractionArgs = [Curve, Image, Image];
 export type QuickpathInteraction = InteractionManager<QuickpathInteractionArgs>;

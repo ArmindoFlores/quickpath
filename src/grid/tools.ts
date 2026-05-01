@@ -1,15 +1,9 @@
-import type { Grid, GridScale, Image, Vector2 } from "@owlbear-rodeo/sdk";
+import type { Dimensions, ParsedGrid, SimpleLine } from "./types";
+import type { Grid, Image } from "@owlbear-rodeo/sdk";
+
 import OBR from "@owlbear-rodeo/sdk";
-import type { Dimensions } from "./gridMaps";
 
 const GRID_SCALE_REGEX = /^(\d+(?:\.\d+)?)([a-zA-Z]*)/;
-
-export type ParsedGrid = Omit<Grid, "scale" | "style"> & { scale: GridScale };
-
-export interface SimpleLine {
-    start: Vector2;
-    end: Vector2;
-}
 
 export function intersects(line1: SimpleLine, line2: SimpleLine) {
     const { start: p1, end: p2 } = line1;

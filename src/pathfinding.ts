@@ -1,4 +1,6 @@
-import type { CostFunction, GridMap } from "./gridMaps";
+import type { CostFunction, GridMap } from "./grid/map";
+
+import type { Path } from "./grid";
 import type { Vector2 } from "@owlbear-rodeo/sdk";
 
 export interface PathfindingResultSuccess {
@@ -7,65 +9,10 @@ export interface PathfindingResultSuccess {
 }
 
 type VectorKey = `${number},${number}`;
-type InlineDirection = "HORIZONTAL" | "VERTICAL" | "DIAGONAL" | "NONE";
-export type Path = Vector2[];
 export type PathfindingResult = PathfindingResultSuccess | null; 
 
 function key(v: Vector2): VectorKey {
     return `${v.x},${v.y}`;
-}
-
-function inline(v1: Vector2, v2: Vector2): InlineDirection {
-    const diff = { x: v2.x - v1.x, y: v2.y - v1.y };
-    
-    // Check diagonals
-    if (Math.abs(diff.x) === Math.abs(diff.y)) {
-        return "DIAGONAL";
-    }
-
-    // Check horizontal movement
-    if (diff.y === 0) {
-        return "HORIZONTAL";
-    }
-
-    // Check vertical movement
-    if (diff.x === 0) {
-        return "VERTICAL";
-    }
-
-    return "NONE";
-}
-
-function coalesce(path: Path) {
-    if (path.length < 2) return path;
-
-    const newPath = [path[0]];
-    let previousInlineDirection: InlineDirection = "NONE";
-
-    function pathPush(point: Vector2) {
-        if (newPath.length > 0 && point.x === newPath[newPath.length - 1].x && point.y === newPath[newPath.length - 1].y) return;
-        newPath.push(point);
-    }
-
-    function changeDirections(i: number) {
-        pathPush(path[i-1]);
-        pathPush(path[i]);
-    }
-    
-    for (let i = 1; i < path.length; i++) {
-        const inlineDirection = inline(newPath.at(-1)!, path[i]);
-        if (i === path.length - 1) {
-            changeDirections(i);
-        }
-        else if (inlineDirection === "NONE") {
-            changeDirections(i);
-        }
-        else if (inlineDirection !== previousInlineDirection && previousInlineDirection !== "NONE") {
-            changeDirections(i);
-        }
-        previousInlineDirection = inlineDirection;
-    }
-    return newPath;
 }
 
 function reconstruct(previous: Map<VectorKey, Vector2>, from: Vector2, to: Vector2) {
@@ -130,7 +77,7 @@ export function pathfind(from: Vector2, to: Vector2, gridMap: GridMap): Pathfind
 
     const reconstructed = reconstruct(previous, from, to);
     return {
-        path: coalesce(reconstructed),
+        path: reconstructed,
         distance: pathDistance(reconstructed, gridMap.cost)
     };
 }
