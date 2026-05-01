@@ -5,12 +5,19 @@ import { cached, SceneCache } from "./caching";
 import { pathfind as _pathfind } from "./pathfinding";
 import { isEqual } from "lodash";
 import {startQuickpathInteraction, updateQuickpathRuler, type QuickpathInteraction } from "./visual";
-import { HexGrid, SquareGrid, type ParsedGrid, type Path, type SimpleLine } from "./grid";
+import { HorizontalHexGrid, SquareGrid, VerticalHexGrid, type ParsedGrid, type Path, type SimpleLine } from "./grid";
 import { parseGrid, getGrid } from "./grid/tools";
 
 const MEASURE_TOOL = "rodeo.owlbear.tool/measure";
 const FIND_PATH_TOOL_MODE = utils.id("find-path");
-const SUPPORTED_GRID_TYPES = ["SQUARE", "HEX_HORIZONTAL"];
+const SUPPORTED_GRID_TYPES = ["SQUARE", "HEX_HORIZONTAL", "HEX_VERTICAL"];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const GRID_CLASSES: Record<string, new (...args: any[]) => GridMap> = {
+    "SQUARE": SquareGrid,
+    "HEX_HORIZONTAL": HorizontalHexGrid,
+    "HEX_VERTICAL": VerticalHexGrid,
+};
 
 // This contains the active interaction manager if active, and null
 // otherwise
@@ -210,7 +217,7 @@ async function updateOccupancyMap(items: Item[], force: boolean = false) {
         return;
     }
 
-    const gridClass = obrGrid.type === "HEX_HORIZONTAL" ? HexGrid : SquareGrid;
+    const gridClass = GRID_CLASSES[obrGrid.type];
     
     gridMap = new gridClass(
         xMin, xMax, yMin, yMax,
@@ -238,7 +245,7 @@ function setupScene() {
             if (obrGrid?.measurement === "ALTERNATING") {
                 OBR.notification.show(`The "ALTERNATING" measuring mode is not supported.`, "ERROR");
             }
-            else if (!SUPPORTED_GRID_TYPES.includes(obrGrid.type)) {
+            else if (!SUPPORTED_GRID_TYPES.includes(obrGrid!.type)) {
                 OBR.notification.show(`The "${obrGrid?.type}" grid type is not supported.`, "ERROR");
             }
             else {
