@@ -6,5 +6,11 @@
     "homepage_url": "https://github.com/ArmindoFlores/quickpath",
     "icon": "/favicon.svg",
     "background_url": "/background.html",
-    "description": "Move tokens from one location to another using the shortest path"
+    "action": {
+        "title": "Quickpath",
+        "icon": "/favicon.svg",
+        "popover": "/index.html",
+        "width": 330
+    },
+    "description": "Move tokens from one location to another using the shortest path."
 }
