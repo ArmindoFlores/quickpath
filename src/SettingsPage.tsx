@@ -1,4 +1,10 @@
-import { Box, Checkbox, FormControlLabel, FormGroup } from "@mui/material";
+import {
+    Box,
+    Checkbox,
+    FormControlLabel,
+    FormGroup,
+    Typography,
+} from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
 
 import OBR from "@owlbear-rodeo/sdk";
@@ -8,6 +14,7 @@ export function SettingsPage() {
     const [quickpathRoomMetadata, _setQuickpathRoomMetadata] = useState<
         Record<string, boolean>
     >({});
+    const [isGM, setIsGM] = useState(false);
 
     const setQuickpathRoomMetadata = useCallback(
         (update: Record<string, boolean>) => {
@@ -38,6 +45,20 @@ export function SettingsPage() {
             }
         });
     }, [setQuickpathRoomMetadata]);
+
+    useEffect(() => {
+        OBR.player.getRole().then((role) => setIsGM(role === "GM"));
+        return OBR.player.onChange((player) => setIsGM(player.role === "GM"));
+    }, []);
+
+    if (!isGM)
+        return (
+            <Box sx={{ p: 2 }}>
+                <Typography>
+                    You do not have permission to view this page.
+                </Typography>
+            </Box>
+        );
 
     return (
         <Box

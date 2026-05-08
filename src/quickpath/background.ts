@@ -89,7 +89,16 @@ async function startPathfinding(event: ToolEvent) {
         !isImage(event.target)
     )
         return;
+
+    if (!(await OBR.player.hasPermission("CHARACTER_UPDATE"))) return;
+
     const target = event.target;
+
+    if (
+        (await OBR.player.hasPermission("CHARACTER_OWNER_ONLY")) &&
+        target.createdUserId !== (await OBR.player.getId())
+    )
+        return;
 
     pathfindingInteraction = await startQuickpathInteraction(target);
     pathfindingStart = target.position;
@@ -315,7 +324,10 @@ function setupScene() {
             {
                 label: "Find Path",
                 icon: "/favicon.svg",
-                filter: { activeTools: [constants.MEASURE_TOOL] },
+                filter: {
+                    activeTools: [constants.MEASURE_TOOL],
+                    permissions: ["CHARACTER_UPDATE"],
+                },
             },
         ],
         cursors: [
