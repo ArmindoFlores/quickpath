@@ -4,7 +4,6 @@ import OBR, {
     type ToolEvent,
     type Vector2,
     type KeyEvent,
-    type Image,
     isCurve,
     isLine,
 } from "@owlbear-rodeo/sdk";
@@ -126,6 +125,21 @@ function updatePathfinding(event: ToolEvent) {
     });
 }
 
+async function moveTarget(target: string, path: Path) {
+    if (path.length === 0) return;
+
+    const oldItem = (await OBR.scene.items.getItems([target]))[0];
+    if (oldItem === undefined) return;
+
+    oldItem.position = gridMap!.toCenteredWorldCoords(path[path.length - 1]);
+
+    // Remove and add item to bypass walls
+    await Promise.all([
+        OBR.scene.items.deleteItems([target]),
+        OBR.scene.items.addItems([oldItem]),
+    ]);
+}
+
 function stopPathfinding(cancel: boolean) {
     if (pathfindingInteraction === null || gridMap === null) return;
 
@@ -136,15 +150,8 @@ function stopPathfinding(cancel: boolean) {
     stop();
     pathfindingInteraction = null;
 
-    if (!cancel) {
-        OBR.scene.items.updateItems([target], (items) => {
-            if (latestPath === null || latestPath.length === 0) return;
-            const image = items[0] as Image;
-            const newPosition = gridMap!.toCenteredWorldCoords(
-                latestPath[latestPath.length - 1],
-            );
-            image.position = newPosition;
-        });
+    if (!cancel && latestPath !== null) {
+        moveTarget(target, latestPath);
     }
 }
 

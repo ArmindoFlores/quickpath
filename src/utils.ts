@@ -6,7 +6,9 @@ function id(...path: string[]) {
 }
 
 function distance(start: Vector2, end: Vector2) {
-    return Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+    return Math.sqrt(
+        Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2),
+    );
 }
 
 export const utils = {
