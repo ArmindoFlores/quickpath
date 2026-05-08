@@ -404,7 +404,9 @@ function setupScene() {
 }
 
 async function onRoomMetadataChange(metadata: Record<string, unknown>) {
-    const quickpathMetadata = metadata[constants.INCLUDED_OBSTRUCTIONS_ID];
+    const quickpathMetadata = metadata[constants.INCLUDED_OBSTRUCTIONS_ID] as
+        | Record<string, boolean>
+        | undefined;
     if (quickpathMetadata === undefined) return;
 
     let changed = false;
