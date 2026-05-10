@@ -89,11 +89,13 @@ async function startPathfinding(event: ToolEvent) {
     )
         return;
 
-    if (!(await OBR.player.hasPermission("CHARACTER_UPDATE"))) return;
+    const isGM = (await OBR.player.getRole()) === "GM";
+    if (!isGM && !(await OBR.player.hasPermission("CHARACTER_UPDATE"))) return;
 
     const target = event.target;
 
     if (
+        !isGM &&
         (await OBR.player.hasPermission("CHARACTER_OWNER_ONLY")) &&
         target.createdUserId !== (await OBR.player.getId())
     )
