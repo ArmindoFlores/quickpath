@@ -4,26 +4,45 @@ import type { Dimensions, Path, SimpleLine } from "./types";
 import type { Vector2 } from "@owlbear-rodeo/sdk";
 import { intersects } from "./tools";
 
+const SQUARE_GRID_NEIGHBOURS: readonly Vector2[] = [
+    { x: 1, y: 0 },
+    { x: 0, y: -1 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 1, y: -1 },
+    { x: -1, y: 1 },
+    { x: -1, y: -1 },
+];
+
 export class SquareGrid implements GridMap {
     unit: string | undefined;
     cost: CostFunction;
-    
+
     private $bounds: Dimensions;
     private $scale: number;
     private $offset: Vector2;
     private $grid: Uint8Array[];
 
-    constructor(xMin: number, xMax: number, yMin: number, yMax: number, scale: number, costFunction: CostFunction, unit: string | undefined = undefined) {
+    constructor(
+        xMin: number,
+        xMax: number,
+        yMin: number,
+        yMax: number,
+        scale: number,
+        costFunction: CostFunction,
+        unit: string | undefined = undefined,
+    ) {
         this.$bounds = {
             width: Math.ceil((xMax - xMin) / scale),
             height: Math.ceil((yMax - yMin) / scale),
         };
         this.$scale = scale;
-        this.$offset = {x: xMin, y: yMin};
+        this.$offset = { x: xMin, y: yMin };
         this.$grid = [];
         this.cost = costFunction;
         this.unit = unit;
-        
+
         for (let i = 0; i < this.$bounds.height; i++) {
             this.$grid.push(new Uint8Array(this.$bounds.width).fill(0xff));
         }
@@ -35,11 +54,17 @@ export class SquareGrid implements GridMap {
             for (let xOffset = -1; xOffset <= 1; xOffset++) {
                 if (yOffset === 0 && xOffset === 0) continue;
                 for (const line of lines) {
-                    const start = this.toCenteredWorldCoords({x: x + xOffset, y: y + yOffset});
-                    const end = this.toCenteredWorldCoords({x, y});
-    
-                    if (intersects(line, {start, end})) {
-                        occupancy |= this.$maskFromNeighbour({x: xOffset, y: yOffset});
+                    const start = this.toCenteredWorldCoords({
+                        x: x + xOffset,
+                        y: y + yOffset,
+                    });
+                    const end = this.toCenteredWorldCoords({ x, y });
+
+                    if (intersects(line, { start, end })) {
+                        occupancy |= this.$maskFromNeighbour({
+                            x: xOffset,
+                            y: yOffset,
+                        });
                         break;
                     }
                 }
@@ -94,7 +119,7 @@ export class SquareGrid implements GridMap {
                 return 0b00001000;
             }
             if (neighbour.y === 0) {
-                return 0b11111111;  // this is invalid
+                return 0b11111111; // this is invalid
             }
             if (neighbour.y < 0) {
                 return 0b00010000;
@@ -115,10 +140,18 @@ export class SquareGrid implements GridMap {
     }
 
     $canEnter(from: Vector2, to: Vector2) {
-        if (to.x < 0 || to.x >= this.$bounds.width || to.y < 0 || to.y >= this.$bounds.height) {
+        if (
+            to.x < 0 ||
+            to.x >= this.$bounds.width ||
+            to.y < 0 ||
+            to.y >= this.$bounds.height
+        ) {
             return false;
         }
-        const mask = this.$maskFromNeighbour({x: from.x - to.x, y: from.y - to.y});
+        const mask = this.$maskFromNeighbour({
+            x: from.x - to.x,
+            y: from.y - to.y,
+        });
         return !(this.$grid[to.y][to.x] & mask);
     }
 
@@ -127,14 +160,11 @@ export class SquareGrid implements GridMap {
     }
 
     walkableNeighbours(node: Vector2, considerOccupancy: boolean = true): Path {
-        const neighbours: Path = [];
-        for (let y = -1; y <= 1; y++) {
-            for (let x = -1; x <= 1; x++) {
-                const neighbour = {x: node.x + x, y: node.y + y};
-                if ((x === 0 && y === 0) || (considerOccupancy && !this.$canEnter(node, neighbour))) continue;
-                neighbours.push(neighbour);
-            }
-        }
-        return neighbours;
+        return SQUARE_GRID_NEIGHBOURS.map((offset) => ({
+            x: node.x + offset.x,
+            y: node.y + offset.y,
+        })).filter((neighbour) =>
+            considerOccupancy ? this.$canEnter(node, neighbour) : true,
+        );
     }
 }
