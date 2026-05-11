@@ -32,6 +32,8 @@ import {
     type ObstructionOptions,
 } from "./obstructions";
 import { constants } from "../constants";
+import type { MessageEvent, QuickpathPathfindMessage, QuickpathMessage } from "./messages/types";
+import { handleError } from "./messages";
 
 const SUPPORTED_GRID_TYPES = ["SQUARE", "HEX_HORIZONTAL", "HEX_VERTICAL"];
 
@@ -451,6 +453,46 @@ async function onRoomMetadataChange(metadata: Record<string, unknown>) {
     }
 }
 
+function handlePathfindMessage(connectionId: string, message: QuickpathPathfindMessage) {
+    if (gridMap === null) {
+        handleError(connectionId, message, "no grid map is initialized");
+        return;
+    }
+
+    try {
+        const start = gridMap.fromWorldCoords(message.from);
+        const end = gridMap.fromWorldCoords(message.to);
+        const result = pathfind(start, end, gridMap);
+        
+        OBR.broadcast.sendMessage(
+            constants.OUTBOUND_MESSAGE_CHANNEL_ID,
+            {id: message.id, recipient: connectionId, result},
+            {destination: "ALL"}
+        );
+    } catch (e) {
+        handleError(connectionId, message, (e as Error).message);
+    }
+}
+
+function receivedMessageHandler(event: MessageEvent) {
+    const { data, connectionId } = event;
+    const message = data as QuickpathMessage;
+    
+    if (typeof message.id !== "string" || typeof message.type !== "string") {
+        console.warn("received invalid message:", message);
+        return;
+    }
+
+    switch (message.type) {
+        case "QUICKPATH_PATHFIND": handlePathfindMessage(connectionId, message); break;
+        default: handleError(connectionId, message, `invalid message type "${message.type}"`);
+    }
+}
+
+export function setupMessageHandlers() {
+    OBR.broadcast.onMessage(constants.BASE_MESSAGE_CHANNEL_ID, receivedMessageHandler);
+}
+
 function setup() {
     let unsubscribe: (() => void) | null = null;
     OBR.room.onMetadataChange((metadata) => onRoomMetadataChange(metadata));
@@ -469,6 +511,7 @@ function setup() {
             unsubscribe = setupScene();
         }
     });
+    setupMessageHandlers();
 }
 
 OBR.onReady(setup);
