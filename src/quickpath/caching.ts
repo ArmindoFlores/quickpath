@@ -1,4 +1,4 @@
-import { isEqual } from "lodash";
+import { cloneDeep, isEqual } from "lodash";
 
 export class SceneCache {
     items: Map<string, object>;
@@ -52,14 +52,14 @@ export function cached<Args extends readonly unknown[], Return>(
                     break;
                 }
             }
-            if (matched) return cacheEntryReturn;
+            if (matched) return cloneDeep(cacheEntryReturn);
         }
         const newResult = func(...args);
         if (cache.length >= maxCacheSize) {
             cache.splice(0, 1);
         }
         cache.push([args, newResult]);
-        return newResult;
+        return cloneDeep(newResult);
     }
 
     wrapper.clearCache = () => cache.splice(0, cache.length);
