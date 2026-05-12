@@ -23,9 +23,10 @@ export interface QuickpathMeasureResponseMessage extends QuickpathMessageBase {
 }
 
 export interface QuickpathPathfindMessage extends QuickpathMessageBase {
-    type: "QUICKPATH_PATHFIND",
-    from: Vector2,
-    to: Vector2,
+    type: "QUICKPATH_PATHFIND";
+    from: Vector2;
+    to: Vector2;
+    centerResult?: boolean;
 }
 
 export type QuickpathMessage = QuickpathPathfindMessage;

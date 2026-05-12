@@ -463,6 +463,13 @@ function handlePathfindMessage(connectionId: string, message: QuickpathPathfindM
         const start = gridMap.fromWorldCoords(message.from);
         const end = gridMap.fromWorldCoords(message.to);
         const result = pathfind(start, end, gridMap);
+        if (result !== null) {
+            result.path = result.path.map(
+                gridCoord => message.centerResult === true
+                    ? gridMap!.toCenteredWorldCoords(gridCoord)
+                    : gridMap!.toWorldCoords(gridCoord)
+            );
+        }
         
         OBR.broadcast.sendMessage(
             constants.OUTBOUND_MESSAGE_CHANNEL_ID,
