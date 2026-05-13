@@ -1,32 +1,23 @@
 import type { Vector2 } from "@owlbear-rodeo/sdk";
+import type { MessageBase } from "@armindoflores/obr-ext-core/types";
+import type { Path } from "../grid";
 
-export interface MessageEvent {
-    data: unknown;
-    connectionId: string;
-};
-
-export interface QuickpathMessageBase {
-    id: string;
-    type: string;
+export interface QuickpathMeasureResponseMessage extends MessageBase {
+    type: "QUICKPATH_PATHFIND_RESPONSE";
+    distance: number;
+    path: Path;
 }
 
-export interface QuickpathMessageError extends QuickpathMessageBase {
-    error: string;
-}
-
-export interface QuickpathMessageResponse<T = unknown> extends QuickpathMessageBase {
-    result: T;
-}
-
-export interface QuickpathMeasureResponseMessage extends QuickpathMessageBase {
-    result: string;
-}
-
-export interface QuickpathPathfindMessage extends QuickpathMessageBase {
+export interface QuickpathPathfindMessage extends MessageBase {
     type: "QUICKPATH_PATHFIND";
     from: Vector2;
     to: Vector2;
     centerResult?: boolean;
 }
 
-export type QuickpathMessage = QuickpathPathfindMessage;
+export type QuickpathMessageRegistry = {
+    QUICKPATH_PATHFIND: {
+        request: QuickpathPathfindMessage;
+        response: QuickpathMeasureResponseMessage;
+    };
+}

@@ -32,8 +32,8 @@ import {
     type ObstructionOptions,
 } from "./obstructions";
 import { constants } from "../constants";
-import type { MessageEvent, QuickpathPathfindMessage, QuickpathMessage } from "./messages/types";
-import { handleError } from "./messages";
+import { api } from "./messages";
+import { makeErrorMessage } from "@armindoflores/obr-ext-core/utils";
 
 const SUPPORTED_GRID_TYPES = ["SQUARE", "HEX_HORIZONTAL", "HEX_VERTICAL"];
 
@@ -453,10 +453,9 @@ async function onRoomMetadataChange(metadata: Record<string, unknown>) {
     }
 }
 
-function handlePathfindMessage(connectionId: string, message: QuickpathPathfindMessage) {
+api.setHandler("QUICKPATH_PATHFIND", async function(message) {
     if (gridMap === null) {
-        handleError(connectionId, message, "no grid map is initialized");
-        return;
+        return makeErrorMessage(message.id, "no grid map is initialized");
     }
 
     try {
@@ -470,35 +469,14 @@ function handlePathfindMessage(connectionId: string, message: QuickpathPathfindM
                     : gridMap!.toWorldCoords(gridCoord)
             );
         }
-        
-        OBR.broadcast.sendMessage(
-            constants.OUTBOUND_MESSAGE_CHANNEL_ID,
-            {id: message.id, recipient: connectionId, result},
-            {destination: "ALL"}
-        );
+        return {
+            type: "QUICKPATH_PATHFIND_RESPONSE",
+            ...result
+        };
     } catch (e) {
-        handleError(connectionId, message, (e as Error).message);
+        return makeErrorMessage(message.id, (e as Error).message);
     }
-}
-
-function receivedMessageHandler(event: MessageEvent) {
-    const { data, connectionId } = event;
-    const message = data as QuickpathMessage;
-    
-    if (typeof message.id !== "string" || typeof message.type !== "string") {
-        console.warn("received invalid message:", message);
-        return;
-    }
-
-    switch (message.type) {
-        case "QUICKPATH_PATHFIND": handlePathfindMessage(connectionId, message); break;
-        default: handleError(connectionId, message, `invalid message type "${message.type}"`);
-    }
-}
-
-export function setupMessageHandlers() {
-    OBR.broadcast.onMessage(constants.BASE_MESSAGE_CHANNEL_ID, receivedMessageHandler);
-}
+});
 
 function setup() {
     let unsubscribe: (() => void) | null = null;
@@ -518,7 +496,7 @@ function setup() {
             unsubscribe = setupScene();
         }
     });
-    setupMessageHandlers();
+    api.register();
 }
 
 OBR.onReady(setup);
