@@ -134,14 +134,17 @@ async function moveTarget(target: string, path: Path) {
 
     const oldItem = (await OBR.scene.items.getItems([target]))[0];
     if (oldItem === undefined) return;
+    
+    // Items on the MAP layer bypass walls
+    const oldLayer = oldItem.layer;
+    await OBR.scene.items.updateItems([oldItem.id], items => {
+        items[0].layer = "MAP";
+    });
 
-    oldItem.position = gridMap!.toCenteredWorldCoords(path[path.length - 1]);
-
-    // Remove and add item to bypass walls
-    await Promise.all([
-        OBR.scene.items.deleteItems([target]),
-        OBR.scene.items.addItems([oldItem]),
-    ]);
+    await OBR.scene.items.updateItems([oldItem.id], items => {
+        items[0].position = gridMap!.toCenteredWorldCoords(path[path.length - 1]);
+        items[0].layer = oldLayer;
+    });
 }
 
 function stopPathfinding(cancel: boolean) {
